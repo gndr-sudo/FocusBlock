@@ -41,8 +41,21 @@ info "Installazione di FocusBlock in ${SCRIPT_DIR}"
 # 1. Installazione dipendenze Python
 # --------------------------------------------------------------------------
 
+# Su Raspberry Pi OS / Debian 'pip' può non essere nel PATH: usiamo
+# 'python3 -m pip' e, se il modulo pip manca, lo installiamo via apt.
+if python3 -m pip --version >/dev/null 2>&1; then
+  PIP="python3 -m pip"
+elif command -v pip3 >/dev/null 2>&1; then
+  PIP="pip3"
+else
+  warn "pip non trovato: installo python3-pip via apt..."
+  apt-get update
+  apt-get install -y python3-pip
+  PIP="python3 -m pip"
+fi
+
 info "Installazione dipendenze Python (flask, apscheduler, requests)..."
-pip install --break-system-packages flask apscheduler requests
+${PIP} install --break-system-packages flask apscheduler requests
 
 # --------------------------------------------------------------------------
 # 2. Credenziali AdGuard Home + secret key
