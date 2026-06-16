@@ -8,16 +8,21 @@
     "enabled": true,
     "start": "14:00",
     "end": "18:00",
-    "days": [0, 1, 2, 3, 4]
+    "days": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ]
   },
   "session_minutes": 30,
   "unlock_minutes": 30,
   "quiz": {
-    "num_questions": 10,
-    "pass_threshold": 70,
-    "timer_seconds": 300
+    "num_questions": 20,
+    "pass_threshold": 70
   },
   "blocked_sites": [],
   "unlock_until": 0,
-  "secret_key": ""
+  "secret_key": "1f560c0253263b15228d60e1d327e69e24cf39a5c6da7a49501a07607f4c0c89"
 }

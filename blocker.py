@@ -58,9 +58,10 @@ DEFAULT_CONFIG = {
     "session_minutes": 30,   # durata accesso dashboard dopo quiz superato
     "unlock_minutes": 30,    # durata sblocco temporaneo siti dopo quiz superato
     "quiz": {
-        "num_questions": 10,   # numero di domande pescate
+        # Numero di domande pescate: pensato per coprire 10-20 minuti di
+        # risposta effettiva. Nessun timer (il quiz si può lasciare aperto).
+        "num_questions": 20,
         "pass_threshold": 70,  # soglia di superamento in percentuale
-        "timer_seconds": 300,  # tempo massimo del quiz in secondi
     },
     # Lista dei siti gestiti da FocusBlock: [{"domain": "...", "ip": "..."}]
     "blocked_sites": [],

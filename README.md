@@ -53,6 +53,11 @@ W: Risposta errata 3
 Il parsing è automatico. Finché non ci sono domande, durante la fascia di
 blocco la dashboard mostra un avviso e consente l'accesso manuale.
 
+Il quiz **non ha timer** (un countdown sarebbe aggirabile lasciando la pagina
+aperta): a ogni accesso vengono estratte casualmente `num_questions` domande
+(default **20**, regolabile dalla pagina *Orari*), un numero pensato per
+coprire circa **10-20 minuti** di risposta effettiva. Soglia di superamento 70%.
+
 ## Meccanismo di blocco
 
 - **Siti**: regole utente AdGuard `||dominio^` aggiunte/rimosse via

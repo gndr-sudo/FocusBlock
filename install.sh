@@ -75,7 +75,7 @@ default = {
     "schedule": {"enabled": True, "start": "14:00", "end": "18:00", "days": [0, 1, 2, 3, 4]},
     "session_minutes": 30,
     "unlock_minutes": 30,
-    "quiz": {"num_questions": 10, "pass_threshold": 70, "timer_seconds": 300},
+    "quiz": {"num_questions": 20, "pass_threshold": 70},
     "blocked_sites": [],
     "unlock_until": 0,
     "secret_key": "",

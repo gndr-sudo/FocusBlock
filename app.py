@@ -205,7 +205,7 @@ def quiz():
         return render_template("quiz.html", no_questions=True, quiz_cfg=cfg["quiz"])
 
     quiz_cfg = cfg.get("quiz", {})
-    num = min(int(quiz_cfg.get("num_questions", 10)), len(all_q))
+    num = min(int(quiz_cfg.get("num_questions", 20)), len(all_q))
     selected = random.sample(all_q, num)
 
     # Per ogni domanda costruiamo 4 opzioni (1 corretta + fino a 3 errate) mischiate
@@ -219,9 +219,9 @@ def quiz():
         correct_indices.append(options.index(q["correct"]))
         rendered.append({"question": q["question"], "options": options})
 
-    # In sessione salviamo solo le info necessarie alla correzione (compatto)
+    # In sessione salviamo solo le info necessarie alla correzione (compatto).
+    # Nessun timer: il quiz si può lasciare aperto, conta solo la preparazione.
     session["quiz"] = {
-        "started": time.time(),
         "correct": correct_indices,
         "count": len(rendered),
     }
@@ -230,7 +230,6 @@ def quiz():
         "quiz.html",
         no_questions=False,
         questions=rendered,
-        timer_seconds=int(quiz_cfg.get("timer_seconds", 300)),
         threshold=int(quiz_cfg.get("pass_threshold", 70)),
     )
 
@@ -253,16 +252,8 @@ def quiz_submit():
         return redirect(url_for("quiz"))
 
     quiz_cfg = cfg.get("quiz", {})
-    timer = int(quiz_cfg.get("timer_seconds", 300))
 
-    # Controllo tempo (con 5 secondi di tolleranza per la latenza)
-    elapsed = time.time() - float(quiz_state.get("started", 0))
-    if elapsed > timer + 5:
-        session.pop("quiz", None)
-        flash("Tempo scaduto! Il quiz va completato entro il limite.", "danger")
-        return redirect(url_for("quiz"))
-
-    # Correzione
+    # Nessun limite di tempo: si procede direttamente alla correzione
     correct_indices = quiz_state.get("correct", [])
     count = quiz_state.get("count", 0)
     score = 0
@@ -440,11 +431,11 @@ def schedule_save():
             days.append(i)
     sch["days"] = days
 
-    # Parametri quiz e durate (con validazione minima)
+    # Parametri quiz e durate (con validazione minima). Nessun timer: il numero
+    # di domande è pensato per coprire 10-20 minuti di risposta effettiva.
     quiz_cfg = cfg.setdefault("quiz", {})
-    quiz_cfg["num_questions"] = _to_int(request.form.get("num_questions"), 10, 1, 100)
+    quiz_cfg["num_questions"] = _to_int(request.form.get("num_questions"), 20, 1, 180)
     quiz_cfg["pass_threshold"] = _to_int(request.form.get("pass_threshold"), 70, 1, 100)
-    quiz_cfg["timer_seconds"] = _to_int(request.form.get("timer_seconds"), 300, 10, 3600)
     cfg["session_minutes"] = _to_int(request.form.get("session_minutes"), 30, 1, 1440)
     cfg["unlock_minutes"] = _to_int(request.form.get("unlock_minutes"), 30, 1, 1440)
 

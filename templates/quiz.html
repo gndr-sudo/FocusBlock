@@ -31,13 +31,12 @@
       </div>
 
     {% else %}
-      <!-- Timer -->
+      <!-- Riepilogo quiz: nessun limite di tempo, conta la preparazione -->
       <div class="card mb-3">
-        <div class="card-body d-flex justify-content-between align-items-center">
+        <div class="card-body d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <span><i class="bi bi-list-check"></i> Domande: <strong>{{ questions|length }}</strong></span>
           <span><i class="bi bi-info-circle"></i> Soglia di superamento: <strong>{{ threshold }}%</strong></span>
-          <span class="fs-4 fw-bold" id="timer">
-            <i class="bi bi-stopwatch"></i> <span id="time-left">--:--</span>
-          </span>
+          <span class="text-muted"><i class="bi bi-infinity"></i> Nessun limite di tempo</span>
         </div>
       </div>
 
@@ -71,32 +70,4 @@
 </div>
 {% endblock %}
 
-{% block scripts %}
-{% if not no_questions %}
-<script>
-  // Timer visibile lato client; allo scadere invia comunque il form
-  let secondsLeft = {{ timer_seconds }};
-  const timeEl = document.getElementById('time-left');
-  const form = document.getElementById('quiz-form');
-
-  function render() {
-    const m = String(Math.floor(secondsLeft / 60)).padStart(2, '0');
-    const s = String(secondsLeft % 60).padStart(2, '0');
-    timeEl.textContent = m + ':' + s;
-    if (secondsLeft <= 30) {
-      document.getElementById('timer').classList.add('text-danger');
-    }
-  }
-
-  render();
-  const iv = setInterval(function () {
-    secondsLeft--;
-    render();
-    if (secondsLeft <= 0) {
-      clearInterval(iv);
-      form.submit(); // tempo scaduto: invia (il server rifiuterà se oltre il limite)
-    }
-  }, 1000);
-</script>
-{% endif %}
-{% endblock %}
+{% block scripts %}{% endblock %}
