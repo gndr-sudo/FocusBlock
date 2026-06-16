@@ -19,7 +19,8 @@ focusblock/
 ├── app.py              # Flask app principale + scheduler
 ├── blocker.py          # logica orari + API AdGuard + ARP
 ├── questions.py        # domande quiz (placeholder, formato Q/A/W)
-├── config.json         # orari, credenziali AdGuard, impostazioni
+├── config.example.json # template di configurazione (tracciato)
+├── config.json         # config reale con credenziali (NON tracciato, creato da install.sh)
 ├── templates/          # UI Bootstrap 5
 ├── focusblock.service  # unit systemd
 └── install.sh          # installazione completa

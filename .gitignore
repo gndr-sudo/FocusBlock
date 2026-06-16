@@ -1,5 +1,8 @@
 __pycache__/
 *.pyc
+# config.json contiene credenziali e secret key: non va tracciato.
+# Il template di riferimento è config.example.json.
+config.json
 config.json.tmp
 *.bak
 venv/
