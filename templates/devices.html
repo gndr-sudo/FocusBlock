@@ -38,9 +38,7 @@
         <select class="form-select" id="device-select" onchange="document.getElementById('ip-manual').value=this.value;">
           <option value="">-- seleziona un dispositivo --</option>
           {% for d in devices %}
-            {% if d.mac != '-' %}
-            <option value="{{ d.ip }}">{{ d.name }} ({{ d.ip }}) - {{ d.mac }}</option>
-            {% endif %}
+            <option value="{{ d.ip }}">{{ d.name }} ({{ d.ip }})</option>
           {% endfor %}
         </select>
       </div>

@@ -366,23 +366,36 @@ def devices():
     arp_ok, arp_data = blocker.get_arp_devices()
     ag_ok, ag_msg = blocker.test_adguard(cfg)
 
-    # Dispositivi gestiti (verranno bloccati durante la fascia oraria)
+    # Nomi dei dispositivi noti ad AdGuard (rDNS/DHCP) per arricchire l'elenco
+    names = blocker.get_adguard_client_names(cfg)
+
     managed = set(blocker.list_managed_devices(cfg))
     # È in corso il blocco effettivo adesso?
     blocking_now = blocker.is_blocking_active(cfg) and not blocker.is_temporarily_unlocked(cfg)
 
-    device_list = []
+    # Unisco tre fonti: ARP table, client noti ad AdGuard, IP gestiti.
+    by_ip = {}
     if arp_ok:
         for dev in arp_data:
-            dev = dict(dev)
-            dev["managed"] = dev["ip"] in managed
-            device_list.append(dev)
+            ip = dev["ip"]
+            by_ip[ip] = {
+                "name": names.get(ip) or dev.get("name") or ip,
+                "ip": ip,
+                "mac": dev.get("mac", "-"),
+                "managed": ip in managed,
+            }
 
-    # IP gestiti non presenti nella ARP table (li mostriamo comunque)
-    arp_ips = {d["ip"] for d in device_list}
+    # Dispositivi che AdGuard conosce per nome ma non sono nella ARP table
+    for ip, nm in names.items():
+        if ip not in by_ip:
+            by_ip[ip] = {"name": nm, "ip": ip, "mac": "-", "managed": ip in managed}
+
+    # IP gestiti non presenti altrove
     for ip in managed:
-        if ip not in arp_ips:
-            device_list.append({"name": ip, "ip": ip, "mac": "-", "managed": True})
+        if ip not in by_ip:
+            by_ip[ip] = {"name": names.get(ip, ip), "ip": ip, "mac": "-", "managed": True}
+
+    device_list = sorted(by_ip.values(), key=blocker.ip_sort_key)
 
     return render_template(
         "devices.html",

@@ -703,5 +703,48 @@ def get_arp_devices():
         name = ip if host in ("?", "") else host
         devices.append({"name": name, "ip": ip, "mac": mac})
 
-    devices.sort(key=lambda d: tuple(int(x) for x in d["ip"].split(".")))
+    devices.sort(key=ip_sort_key)
     return True, devices
+
+
+def ip_sort_key(device_or_ip):
+    """Chiave di ordinamento per IPv4. Accetta un dict {'ip':...} o una stringa.
+    Gli IP non validi finiscono in fondo."""
+    ip = device_or_ip["ip"] if isinstance(device_or_ip, dict) else device_or_ip
+    try:
+        return tuple(int(x) for x in ip.split("."))
+    except (ValueError, AttributeError):
+        return (999, 999, 999, 999)
+
+
+def get_adguard_client_names(cfg=None):
+    """Mappa IP -> nome usando i client noti ad AdGuard Home.
+
+    AdGuard ricava i nomi dei dispositivi via rDNS/DHCP (auto_clients) e li
+    espone insieme ai client configurati manualmente. È una fonte di nomi
+    molto migliore della ARP table (che spesso riporta solo '?').
+
+    Ritorna un dict {ip: nome}. In caso di errore ritorna {} (best effort)."""
+    try:
+        data = _ag_get("/control/clients", cfg)
+    except requests.exceptions.RequestException:
+        return {}
+
+    names = {}
+    # Client rilevati automaticamente (rDNS, DHCP, WHOIS)
+    for c in data.get("auto_clients") or []:
+        ip = c.get("ip")
+        name = (c.get("name") or "").strip()
+        if ip and name and name != ip:
+            names[ip] = name
+
+    # Client configurati manualmente: 'ids' può contenere IP/MAC/CIDR
+    for c in data.get("clients") or []:
+        name = (c.get("name") or "").strip()
+        if not name:
+            continue
+        for ident in c.get("ids", []) or []:
+            if _is_valid_ip(ident):
+                names.setdefault(ident, name)
+
+    return names
