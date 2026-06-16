@@ -82,10 +82,9 @@ import json, os
 
 config_file = os.environ["CONFIG_FILE"]
 
-# Configurazione di default (coerente con blocker.DEFAULT_CONFIG)
+# Configurazione di default (le pianificazioni le gestisce l'app via migrazione)
 default = {
     "adguard": {"url": "http://192.168.1.200:3000", "username": "", "password": ""},
-    "schedule": {"enabled": True, "start": "14:00", "end": "18:00", "days": [0, 1, 2, 3, 4]},
     "session_minutes": 30,
     "unlock_minutes": 30,
     "quiz": {"num_questions": 20, "pass_threshold": 70},
@@ -95,7 +94,7 @@ default = {
     "secret_key": "",
 }
 
-# Carichiamo l'eventuale config esistente per non perdere orari/siti
+# Carichiamo l'eventuale config esistente per non perdere orari/siti/dispositivi
 existing = {}
 if os.path.exists(config_file):
     try:
@@ -104,13 +103,12 @@ if os.path.exists(config_file):
     except Exception:
         existing = {}
 
-cfg = default.copy()
-cfg.update({k: v for k, v in existing.items() if k in cfg})
-# Manteniamo i sottodizionari esistenti dove presenti
-for key in ("adguard", "schedule", "quiz"):
-    merged = dict(default[key])
-    merged.update(existing.get(key, {}))
-    cfg[key] = merged
+cfg = dict(default)
+cfg.update(existing)  # preserva tutto ciò che già esiste (schedules, siti, ecc.)
+# Merge profondo di adguard per non perdere sotto-chiavi
+ag = dict(default["adguard"])
+ag.update(existing.get("adguard", {}))
+cfg["adguard"] = ag
 
 # Applichiamo i valori inseriti dall'utente
 cfg["adguard"]["url"] = os.environ["AG_URL"]

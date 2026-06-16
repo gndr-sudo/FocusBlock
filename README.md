@@ -10,7 +10,19 @@ le API REST di **AdGuard Home**, che funge da DNS server per tutta la LAN.
 - **Fuori dalla fascia di blocco** → accesso diretto alla dashboard, nessun quiz.
 - **Dentro la fascia di blocco** → per accedere bisogna superare il quiz (≥70%).
   Se superato → accesso dashboard per 30 min + sblocco temporaneo siti per 30 min.
-- Il blocco dei siti è attivo **solo** durante la fascia oraria configurata.
+- Il blocco di siti e dispositivi è attivo **solo** durante le fasce orarie configurate.
+
+## Pianificazioni (calendario)
+
+Si possono definire più pianificazioni dalla pagina *Orari*:
+
+- **Settimanali (ricorrenti)**: giorni della settimana + fascia oraria.
+- **Una tantum**: una data specifica + fascia oraria (es. impostata la sera prima
+  per il giorno dopo). Scadono e vengono rimosse automaticamente a fine giornata.
+- **Blocco rapido**: pulsanti *Oggi/Domani* per aggiungere al volo una fascia una tantum.
+
+Ogni pianificazione si può attivare/disattivare o rimuovere singolarmente. Il
+blocco è attivo se **almeno una** pianificazione abilitata copre l'istante corrente.
 
 ## Struttura
 

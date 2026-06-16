@@ -4,12 +4,16 @@
     "username": "",
     "password": ""
   },
-  "schedule": {
-    "enabled": true,
-    "start": "14:00",
-    "end": "18:00",
-    "days": [0, 1, 2, 3, 4]
-  },
+  "schedules": [
+    {
+      "id": "esempio01",
+      "type": "weekly",
+      "enabled": false,
+      "days": [0, 1, 2, 3, 4],
+      "start": "14:00",
+      "end": "18:00"
+    }
+  ],
   "session_minutes": 30,
   "unlock_minutes": 30,
   "quiz": {

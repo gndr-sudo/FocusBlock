@@ -31,20 +31,20 @@
     </div>
   </div>
 
-  <!-- Fascia oraria -->
+  <!-- Pianificazioni di oggi -->
   <div class="col-md-6 col-lg-3">
     <div class="card h-100">
       <div class="card-body text-center">
         <i class="bi bi-clock-history display-5 text-primary"></i>
-        <h5 class="mt-2">Fascia di blocco</h5>
-        {% if status.schedule.enabled %}
-          <p class="mb-0 fw-bold">{{ status.schedule.start }} – {{ status.schedule.end }}</p>
-          <p class="text-muted mb-0 small">
-            {% for d in status.schedule.days %}{{ status.giorni[d][:3] }} {% endfor %}
-          </p>
+        <h5 class="mt-2">Blocchi di oggi</h5>
+        {% if status.today_windows %}
+          {% for w in status.today_windows %}
+            <p class="mb-0 fw-bold small">{{ w }}</p>
+          {% endfor %}
         {% else %}
-          <p class="text-muted mb-0">Pianificazione disattivata</p>
+          <p class="text-muted mb-0 small">Nessun blocco previsto oggi</p>
         {% endif %}
+        <a href="{{ url_for('schedule') }}" class="small">Gestisci ({{ status.schedules_count }})</a>
       </div>
     </div>
   </div>

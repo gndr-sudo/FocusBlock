@@ -18,6 +18,7 @@ import os
 import re
 import json
 import time
+import uuid
 import socket
 import threading
 import datetime
@@ -47,13 +48,6 @@ DEFAULT_CONFIG = {
         "url": "http://192.168.1.200:3000",
         "username": "",
         "password": "",
-    },
-    "schedule": {
-        "enabled": True,
-        "start": "14:00",
-        "end": "18:00",
-        # Giorni della settimana attivi: 0 = Lunedì ... 6 = Domenica
-        "days": [0, 1, 2, 3, 4],
     },
     "session_minutes": 30,   # durata accesso dashboard dopo quiz superato
     "unlock_minutes": 30,    # durata sblocco temporaneo siti dopo quiz superato
@@ -103,7 +97,48 @@ def load_config():
             except (ValueError, OSError):
                 # File corrotto o illeggibile: ripartiamo dai default
                 data = {}
-        return _deep_merge(DEFAULT_CONFIG, data)
+        cfg = _deep_merge(DEFAULT_CONFIG, data)
+        _migrate_schedules(cfg)
+        return cfg
+
+
+def _new_id():
+    """Identificativo breve per una voce di pianificazione."""
+    return uuid.uuid4().hex[:8]
+
+
+def _migrate_schedules(cfg):
+    """Garantisce la presenza di `cfg['schedules']` (lista di pianificazioni).
+
+    - Se esiste già `schedules`, la mantiene (rimuovendo il vecchio `schedule`).
+    - Se esiste solo il vecchio `schedule` singolo, lo converte in una voce
+      settimanale.
+    - Se non c'è nulla, crea una pianificazione settimanale di default
+      (Lun-Ven 14:00-18:00, disattivata)."""
+    if isinstance(cfg.get("schedules"), list):
+        cfg.pop("schedule", None)
+        return
+
+    legacy = cfg.get("schedule")
+    if legacy:
+        cfg["schedules"] = [{
+            "id": _new_id(),
+            "type": "weekly",
+            "enabled": legacy.get("enabled", True),
+            "days": legacy.get("days", [0, 1, 2, 3, 4]),
+            "start": legacy.get("start", "14:00"),
+            "end": legacy.get("end", "18:00"),
+        }]
+    else:
+        cfg["schedules"] = [{
+            "id": _new_id(),
+            "type": "weekly",
+            "enabled": False,
+            "days": [0, 1, 2, 3, 4],
+            "start": "14:00",
+            "end": "18:00",
+        }]
+    cfg.pop("schedule", None)
 
 
 def save_config(cfg):
@@ -128,30 +163,166 @@ def _parse_hhmm(value, default):
         return default
 
 
-def is_blocking_active(cfg=None, now=None):
-    """Ritorna True se l'orario attuale rientra nella fascia di blocco
-    configurata e nel giorno della settimana selezionato."""
-    cfg = cfg or load_config()
-    sch = cfg.get("schedule", {})
-
-    if not sch.get("enabled", True):
-        return False
-
-    now = now or datetime.datetime.now()
-
-    # Giorno della settimana (0 = Lunedì)
-    if now.weekday() not in sch.get("days", []):
-        return False
-
-    start = _parse_hhmm(sch.get("start"), datetime.time(14, 0))
-    end = _parse_hhmm(sch.get("end"), datetime.time(18, 0))
-    current = now.time()
-
+def _in_window(current, start, end):
+    """True se `current` (time) è nella finestra [start, end). Gestisce anche
+    le finestre che attraversano la mezzanotte (end <= start)."""
     if start <= end:
-        # Fascia normale nello stesso giorno (es. 14:00 -> 18:00)
         return start <= current < end
-    # Fascia che attraversa la mezzanotte (es. 22:00 -> 06:00)
     return current >= start or current < end
+
+
+def entry_applies_on_day(entry, now):
+    """True se la voce di pianificazione si applica al giorno di `now`
+    (a prescindere dall'orario)."""
+    if entry.get("type") == "once":
+        return entry.get("date") == now.strftime("%Y-%m-%d")
+    # weekly
+    return now.weekday() in entry.get("days", [])
+
+
+def entry_active_now(entry, now):
+    """True se la voce di pianificazione è attiva nell'istante `now`."""
+    if not entry_applies_on_day(entry, now):
+        return False
+    start = _parse_hhmm(entry.get("start"), datetime.time(0, 0))
+    end = _parse_hhmm(entry.get("end"), datetime.time(23, 59))
+    return _in_window(now.time(), start, end)
+
+
+def is_blocking_active(cfg=None, now=None):
+    """Ritorna True se almeno una pianificazione abilitata è attiva ora."""
+    cfg = cfg or load_config()
+    now = now or datetime.datetime.now()
+    for entry in cfg.get("schedules", []):
+        if not entry.get("enabled", True):
+            continue
+        if entry_active_now(entry, now):
+            return True
+    return False
+
+
+# Etichette giorni per la descrizione testuale delle pianificazioni
+_GIORNI_BREVI = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"]
+
+
+def describe_entry(entry):
+    """Descrizione testuale leggibile di una pianificazione (per la UI)."""
+    times = f"{entry.get('start', '?')}–{entry.get('end', '?')}"
+    if entry.get("type") == "once":
+        try:
+            d = datetime.datetime.strptime(entry["date"], "%Y-%m-%d")
+            return f"{d.strftime('%d/%m/%Y')} · {times}"
+        except (ValueError, KeyError, TypeError):
+            return f"{entry.get('date', '?')} · {times}"
+    days = sorted(entry.get("days", []))
+    if days == [0, 1, 2, 3, 4]:
+        gg = "Lun–Ven"
+    elif days == [0, 1, 2, 3, 4, 5, 6]:
+        gg = "Tutti i giorni"
+    elif days == [5, 6]:
+        gg = "Weekend"
+    elif days:
+        gg = ", ".join(_GIORNI_BREVI[i] for i in days)
+    else:
+        gg = "nessun giorno"
+    return f"{gg} · {times}"
+
+
+def _valid_hhmm(value):
+    """True se `value` è un orario 'HH:MM' valido."""
+    try:
+        hh, mm = value.split(":")
+        return 0 <= int(hh) <= 23 and 0 <= int(mm) <= 59
+    except (ValueError, AttributeError):
+        return False
+
+
+def _valid_date(value):
+    """True se `value` è una data 'YYYY-MM-DD' valida."""
+    try:
+        datetime.datetime.strptime(value, "%Y-%m-%d")
+        return True
+    except (ValueError, TypeError):
+        return False
+
+
+def add_schedule_entry(entry):
+    """Valida e aggiunge una pianificazione. Ritorna (ok, messaggio)."""
+    if not _valid_hhmm(entry.get("start")) or not _valid_hhmm(entry.get("end")):
+        return False, "Orari non validi (usa HH:MM)."
+    if entry.get("start") == entry.get("end"):
+        return False, "Inizio e fine non possono coincidere."
+
+    if entry.get("type") == "once":
+        if not _valid_date(entry.get("date")):
+            return False, "Data non valida."
+    elif entry.get("type") == "weekly":
+        if not entry.get("days"):
+            return False, "Seleziona almeno un giorno."
+    else:
+        return False, "Tipo di pianificazione non valido."
+
+    entry["id"] = _new_id()
+    entry.setdefault("enabled", True)
+
+    cfg = load_config()
+    cfg.setdefault("schedules", []).append(entry)
+    save_config(cfg)
+    apply_blocking_state(cfg)
+    return True, "Pianificazione aggiunta."
+
+
+def remove_schedule_entry(entry_id):
+    """Rimuove una pianificazione per id. Ritorna (ok, messaggio)."""
+    cfg = load_config()
+    current = cfg.get("schedules", [])
+    new = [e for e in current if e.get("id") != entry_id]
+    if len(new) == len(current):
+        return False, "Pianificazione non trovata."
+    cfg["schedules"] = new
+    save_config(cfg)
+    apply_blocking_state(cfg)
+    return True, "Pianificazione rimossa."
+
+
+def set_schedule_entry_enabled(entry_id, enabled):
+    """Attiva/disattiva una pianificazione per id. Ritorna (ok, messaggio)."""
+    cfg = load_config()
+    found = False
+    for e in cfg.get("schedules", []):
+        if e.get("id") == entry_id:
+            e["enabled"] = bool(enabled)
+            found = True
+            break
+    if not found:
+        return False, "Pianificazione non trovata."
+    save_config(cfg)
+    apply_blocking_state(cfg)
+    return True, ("Pianificazione attivata." if enabled else "Pianificazione disattivata.")
+
+
+def prune_expired_schedules(cfg):
+    """Rimuove le pianificazioni 'once' con data passata. Ritorna True se ha
+    modificato la lista."""
+    today = datetime.date.today().strftime("%Y-%m-%d")
+    current = cfg.get("schedules", [])
+    kept = [e for e in current
+            if not (e.get("type") == "once" and e.get("date") and e["date"] < today)]
+    if len(kept) != len(current):
+        cfg["schedules"] = kept
+        return True
+    return False
+
+
+def list_schedules(cfg=None):
+    """Ritorna le pianificazioni con una descrizione leggibile pronta per la UI."""
+    cfg = cfg or load_config()
+    out = []
+    for e in cfg.get("schedules", []):
+        item = dict(e)
+        item["description"] = describe_entry(e)
+        out.append(item)
+    return out
 
 
 def is_temporarily_unlocked(cfg=None, now_ts=None):
@@ -295,6 +466,11 @@ def apply_blocking_state(cfg=None):
     Chiamata sia dallo scheduler (ogni minuto) sia dopo modifiche puntuali.
     Ritorna (ok, messaggio, should_block)."""
     cfg = cfg or load_config()
+
+    # Pulizia delle pianificazioni "once" ormai scadute
+    if prune_expired_schedules(cfg):
+        save_config(cfg)
+
     should_block = is_blocking_active(cfg) and not is_temporarily_unlocked(cfg)
 
     # Domini

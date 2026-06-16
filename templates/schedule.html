@@ -4,48 +4,158 @@
 {% block content %}
 <h2 class="mb-3"><i class="bi bi-clock"></i> Orari di blocco</h2>
 
-<form method="post" action="{{ url_for('schedule_save') }}">
-  <div class="card mb-4">
-    <div class="card-body">
-      <h5 class="card-title">Fascia oraria</h5>
+<!-- Blocco rapido: una tantum per oggi o domani -->
+<div class="card mb-4 border-primary">
+  <div class="card-body">
+    <h5 class="card-title"><i class="bi bi-lightning-charge"></i> Blocco rapido</h5>
+    <p class="text-muted small mb-3">
+      Imposta al volo un blocco valido solo per un giorno (es. la sera prima, per domani).
+      Scade da solo a fine giornata.
+    </p>
+    <form method="post" action="{{ url_for('schedule_quick') }}" class="row g-2 align-items-end">
+      <div class="col-6 col-md-3">
+        <label class="form-label small text-muted">Quando</label>
+        <select name="when" class="form-select">
+          <option value="today">Oggi ({{ today_label }})</option>
+          <option value="tomorrow" selected>Domani ({{ tomorrow_label }})</option>
+        </select>
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label small text-muted">Dalle</label>
+        <input type="time" name="start" class="form-control" value="14:00" required>
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label small text-muted">Alle</label>
+        <input type="time" name="end" class="form-control" value="18:00" required>
+      </div>
+      <div class="col-6 col-md-3 d-grid">
+        <button type="submit" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Aggiungi</button>
+      </div>
+    </form>
+  </div>
+</div>
 
-      <div class="form-check form-switch mb-3">
-        <input class="form-check-input" type="checkbox" name="enabled" id="enabled"
-               {% if schedule.enabled %}checked{% endif %}>
-        <label class="form-check-label" for="enabled">Pianificazione attiva</label>
+<!-- Elenco pianificazioni -->
+<div class="card mb-4">
+  <div class="card-body">
+    <h5 class="card-title">Pianificazioni attive ({{ schedules|length }})</h5>
+    {% if schedules %}
+    <div class="table-responsive">
+      <table class="table align-middle">
+        <thead>
+          <tr><th>Tipo</th><th>Quando</th><th>Stato</th><th class="text-end">Azioni</th></tr>
+        </thead>
+        <tbody>
+          {% for s in schedules %}
+          <tr class="{{ '' if s.enabled else 'opacity-50' }}">
+            <td>
+              {% if s.type == 'once' %}
+                <span class="badge bg-info text-dark"><i class="bi bi-calendar-event"></i> Una tantum</span>
+              {% else %}
+                <span class="badge bg-secondary"><i class="bi bi-arrow-repeat"></i> Settimanale</span>
+              {% endif %}
+            </td>
+            <td>{{ s.description }}</td>
+            <td>
+              {% if s.enabled %}
+                <span class="badge bg-success">Attiva</span>
+              {% else %}
+                <span class="badge bg-secondary">Disattiva</span>
+              {% endif %}
+            </td>
+            <td class="text-end">
+              <form method="post" action="{{ url_for('schedule_toggle') }}" class="d-inline">
+                <input type="hidden" name="id" value="{{ s.id }}">
+                <input type="hidden" name="enabled" value="{{ '0' if s.enabled else '1' }}">
+                {% if s.enabled %}
+                  <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-pause"></i> Disattiva</button>
+                {% else %}
+                  <button class="btn btn-sm btn-outline-success"><i class="bi bi-play"></i> Attiva</button>
+                {% endif %}
+              </form>
+              <form method="post" action="{{ url_for('schedule_remove') }}" class="d-inline">
+                <input type="hidden" name="id" value="{{ s.id }}">
+                <button class="btn btn-sm btn-outline-danger"
+                        onclick="return confirm('Rimuovere questa pianificazione?');">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-muted mb-0">Nessuna pianificazione. Aggiungine una qui sotto o usa il blocco rapido.</p>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Aggiungi pianificazione (settimanale o una tantum) -->
+<div class="card mb-4">
+  <div class="card-body">
+    <h5 class="card-title">Aggiungi pianificazione</h5>
+    <form method="post" action="{{ url_for('schedule_add') }}">
+      <div class="mb-3">
+        <label class="form-label">Tipo</label>
+        <div class="btn-group w-100" role="group">
+          <input type="radio" class="btn-check" name="type" id="type-weekly" value="weekly" checked
+                 onchange="document.getElementById('weekly-box').style.display='block';document.getElementById('once-box').style.display='none';">
+          <label class="btn btn-outline-primary" for="type-weekly"><i class="bi bi-arrow-repeat"></i> Settimanale (ricorrente)</label>
+          <input type="radio" class="btn-check" name="type" id="type-once" value="once"
+                 onchange="document.getElementById('weekly-box').style.display='none';document.getElementById('once-box').style.display='block';">
+          <label class="btn btn-outline-primary" for="type-once"><i class="bi bi-calendar-event"></i> Una tantum (data)</label>
+        </div>
+      </div>
+
+      <div id="weekly-box">
+        <label class="form-label">Giorni della settimana</label>
+        <div class="d-flex flex-wrap gap-2 mb-3">
+          {% for i in range(7) %}
+          <input type="checkbox" class="btn-check" name="day{{ i }}" id="day{{ i }}"
+                 {% if i < 5 %}checked{% endif %}>
+          <label class="btn btn-outline-primary" for="day{{ i }}">{{ giorni[i][:3] }}</label>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div id="once-box" style="display:none;">
+        <div class="mb-3">
+          <label class="form-label">Data</label>
+          <input type="date" name="date" class="form-control" value="{{ tomorrow }}" min="{{ today }}">
+        </div>
       </div>
 
       <div class="row g-3 mb-3">
         <div class="col-sm-6">
           <label class="form-label">Inizio</label>
-          <input type="time" name="start" class="form-control" value="{{ schedule.start }}" required>
+          <input type="time" name="start" class="form-control" value="14:00" required>
         </div>
         <div class="col-sm-6">
           <label class="form-label">Fine</label>
-          <input type="time" name="end" class="form-control" value="{{ schedule.end }}" required>
+          <input type="time" name="end" class="form-control" value="18:00" required>
         </div>
       </div>
 
-      <label class="form-label">Giorni della settimana</label>
-      <div class="d-flex flex-wrap gap-2">
-        {% for i in range(7) %}
-        <input type="checkbox" class="btn-check" name="day{{ i }}" id="day{{ i }}"
-               {% if i in schedule.days %}checked{% endif %}>
-        <label class="btn btn-outline-primary" for="day{{ i }}">{{ giorni[i][:3] }}</label>
-        {% endfor %}
+      <div class="d-grid">
+        <button type="submit" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Aggiungi pianificazione</button>
       </div>
-    </div>
+    </form>
   </div>
+</div>
 
-  <div class="card mb-4">
-    <div class="card-body">
-      <h5 class="card-title">Parametri quiz e sblocco</h5>
+<!-- Parametri quiz e durate -->
+<div class="card mb-5">
+  <div class="card-body">
+    <h5 class="card-title">Parametri quiz e sblocco</h5>
+    <form method="post" action="{{ url_for('schedule_settings') }}">
       <div class="row g-3">
         <div class="col-md-6">
           <label class="form-label">N° domande</label>
           <input type="number" name="num_questions" class="form-control" min="1" max="180"
                  value="{{ quiz_cfg.num_questions }}">
-          <div class="form-text">Senza limite di tempo: scegli un numero che copra ~10-20 min di risposta (≈20).</div>
+          <div class="form-text">Senza limite di tempo: ~20 domande coprono 10-20 min.</div>
         </div>
         <div class="col-md-6">
           <label class="form-label">Soglia superamento (%)</label>
@@ -58,16 +168,15 @@
                  value="{{ session_minutes }}">
         </div>
         <div class="col-md-6">
-          <label class="form-label">Durata sblocco siti (min)</label>
+          <label class="form-label">Durata sblocco siti/dispositivi (min)</label>
           <input type="number" name="unlock_minutes" class="form-control" min="1" max="1440"
                  value="{{ unlock_minutes }}">
         </div>
       </div>
-    </div>
+      <div class="d-grid mt-3">
+        <button type="submit" class="btn btn-outline-primary"><i class="bi bi-save"></i> Salva impostazioni</button>
+      </div>
+    </form>
   </div>
-
-  <div class="d-grid mb-5">
-    <button type="submit" class="btn btn-primary btn-lg"><i class="bi bi-save"></i> Salva impostazioni</button>
-  </div>
-</form>
+</div>
 {% endblock %}

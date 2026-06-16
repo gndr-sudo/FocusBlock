@@ -149,15 +149,22 @@ def status_info():
 
     ag_ok, ag_msg = blocker.test_adguard(cfg)
 
+    # Pianificazioni che si applicano oggi (abilitate)
+    schedules = blocker.list_schedules(cfg)
+    enabled = [s for s in schedules if s.get("enabled", True)]
+    today_windows = [s["description"] for s in enabled
+                     if blocker.entry_applies_on_day(s, now)]
+
     return {
         "active": active,
         "blocking_now": active and not unlocked,
         "unlocked": unlocked,
         "unlock_left": unlock_left,
         "session_left": session_left,
-        "schedule": cfg.get("schedule", {}),
-        "giorni": GIORNI,
+        "schedules_count": len(enabled),
+        "today_windows": today_windows,
         "blocked_count": len(cfg.get("blocked_sites", [])),
+        "blocked_devices_count": len(cfg.get("blocked_devices", [])),
         "adguard_ok": ag_ok,
         "adguard_msg": ag_msg,
         "now": now.strftime("%H:%M"),
@@ -410,49 +417,91 @@ def devices_toggle():
 @access_required
 def schedule():
     cfg = blocker.load_config()
+    today = datetime.date.today()
+    tomorrow = today + datetime.timedelta(days=1)
     return render_template(
         "schedule.html",
-        schedule=cfg.get("schedule", {}),
+        schedules=blocker.list_schedules(cfg),
         quiz_cfg=cfg.get("quiz", {}),
         session_minutes=cfg.get("session_minutes", 30),
         unlock_minutes=cfg.get("unlock_minutes", 30),
         giorni=GIORNI,
+        today=today.strftime("%Y-%m-%d"),
+        tomorrow=tomorrow.strftime("%Y-%m-%d"),
+        today_label=today.strftime("%d/%m"),
+        tomorrow_label=tomorrow.strftime("%d/%m"),
     )
 
 
-@app.route("/schedule/save", methods=["POST"])
+@app.route("/schedule/add", methods=["POST"])
 @access_required
-def schedule_save():
+def schedule_add():
+    tipo = request.form.get("type", "weekly")
+    entry = {
+        "type": tipo,
+        "start": request.form.get("start", ""),
+        "end": request.form.get("end", ""),
+        "enabled": True,
+    }
+    if tipo == "once":
+        entry["date"] = request.form.get("date", "")
+    else:
+        entry["days"] = [i for i in range(7) if request.form.get(f"day{i}") == "on"]
+
+    ok, msg = blocker.add_schedule_entry(entry)
+    flash(msg, "success" if ok else "danger")
+    return redirect(url_for("schedule"))
+
+
+@app.route("/schedule/quick", methods=["POST"])
+@access_required
+def schedule_quick():
+    """Blocco rapido 'una tantum' per oggi o domani."""
+    when = request.form.get("when", "today")
+    day = datetime.date.today()
+    if when == "tomorrow":
+        day += datetime.timedelta(days=1)
+    entry = {
+        "type": "once",
+        "date": day.strftime("%Y-%m-%d"),
+        "start": request.form.get("start", ""),
+        "end": request.form.get("end", ""),
+        "enabled": True,
+    }
+    ok, msg = blocker.add_schedule_entry(entry)
+    flash(msg, "success" if ok else "danger")
+    return redirect(url_for("schedule"))
+
+
+@app.route("/schedule/remove", methods=["POST"])
+@access_required
+def schedule_remove():
+    ok, msg = blocker.remove_schedule_entry(request.form.get("id", ""))
+    flash(msg, "success" if ok else "danger")
+    return redirect(url_for("schedule"))
+
+
+@app.route("/schedule/toggle", methods=["POST"])
+@access_required
+def schedule_toggle():
+    enabled = request.form.get("enabled", "0") == "1"
+    ok, msg = blocker.set_schedule_entry_enabled(request.form.get("id", ""), enabled)
+    flash(msg, "success" if ok else "danger")
+    return redirect(url_for("schedule"))
+
+
+@app.route("/schedule/settings", methods=["POST"])
+@access_required
+def schedule_settings():
+    """Salva i parametri del quiz e le durate (non le pianificazioni)."""
     cfg = blocker.load_config()
-    sch = cfg.setdefault("schedule", {})
-
-    sch["enabled"] = request.form.get("enabled") == "on"
-    sch["start"] = request.form.get("start", "14:00")
-    sch["end"] = request.form.get("end", "18:00")
-
-    # Giorni selezionati (checkbox day0..day6)
-    days = []
-    for i in range(7):
-        if request.form.get(f"day{i}") == "on":
-            days.append(i)
-    sch["days"] = days
-
-    # Parametri quiz e durate (con validazione minima). Nessun timer: il numero
-    # di domande è pensato per coprire 10-20 minuti di risposta effettiva.
     quiz_cfg = cfg.setdefault("quiz", {})
     quiz_cfg["num_questions"] = _to_int(request.form.get("num_questions"), 20, 1, 180)
     quiz_cfg["pass_threshold"] = _to_int(request.form.get("pass_threshold"), 70, 1, 100)
     cfg["session_minutes"] = _to_int(request.form.get("session_minutes"), 30, 1, 1440)
     cfg["unlock_minutes"] = _to_int(request.form.get("unlock_minutes"), 30, 1, 1440)
-
     blocker.save_config(cfg)
-
-    # Riapplichiamo subito lo stato secondo i nuovi orari
-    ok, msg, _ = blocker.apply_blocking_state(cfg)
-    if ok:
-        flash("Orari e impostazioni salvati.", "success")
-    else:
-        flash(f"Impostazioni salvate, ma AdGuard non aggiornato: {msg}", "warning")
+    flash("Impostazioni salvate.", "success")
     return redirect(url_for("schedule"))
 
 
