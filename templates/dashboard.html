@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - FocusBlock{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+  <div class="col">
+    <h2 class="mb-1"><i class="bi bi-speedometer2"></i> Dashboard</h2>
+    <p class="text-muted">Stato attuale del sistema — ore {{ status.now }}</p>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <!-- Stato blocco -->
+  <div class="col-md-6 col-lg-3">
+    <div class="card h-100">
+      <div class="card-body text-center">
+        {% if status.blocking_now %}
+          <i class="bi bi-lock-fill display-5 text-danger"></i>
+          <h5 class="mt-2">Blocco ATTIVO</h5>
+          <p class="text-muted mb-0">I siti distraenti sono bloccati.</p>
+        {% elif status.active and status.unlocked %}
+          <i class="bi bi-unlock-fill display-5 text-warning"></i>
+          <h5 class="mt-2">Sblocco temporaneo</h5>
+          <p class="text-muted mb-0">Restano ~{{ status.unlock_left }} min.</p>
+        {% else %}
+          <i class="bi bi-unlock-fill display-5 text-success"></i>
+          <h5 class="mt-2">Fuori fascia</h5>
+          <p class="text-muted mb-0">Nessun blocco in corso.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Fascia oraria -->
+  <div class="col-md-6 col-lg-3">
+    <div class="card h-100">
+      <div class="card-body text-center">
+        <i class="bi bi-clock-history display-5 text-primary"></i>
+        <h5 class="mt-2">Fascia di blocco</h5>
+        {% if status.schedule.enabled %}
+          <p class="mb-0 fw-bold">{{ status.schedule.start }} – {{ status.schedule.end }}</p>
+          <p class="text-muted mb-0 small">
+            {% for d in status.schedule.days %}{{ status.giorni[d][:3] }} {% endfor %}
+          </p>
+        {% else %}
+          <p class="text-muted mb-0">Pianificazione disattivata</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Siti bloccati -->
+  <div class="col-md-6 col-lg-3">
+    <div class="card h-100">
+      <div class="card-body text-center">
+        <i class="bi bi-globe display-5 text-info"></i>
+        <h5 class="mt-2">Siti gestiti</h5>
+        <p class="display-6 mb-0">{{ status.blocked_count }}</p>
+        <a href="{{ url_for('sites') }}" class="small">Gestisci</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- AdGuard -->
+  <div class="col-md-6 col-lg-3">
+    <div class="card h-100">
+      <div class="card-body text-center">
+        {% if status.adguard_ok %}
+          <i class="bi bi-hdd-network-fill display-5 text-success"></i>
+          <h5 class="mt-2">AdGuard OK</h5>
+          <p class="text-muted mb-0 small">Connesso</p>
+        {% else %}
+          <i class="bi bi-hdd-network display-5 text-danger"></i>
+          <h5 class="mt-2">AdGuard KO</h5>
+          <p class="text-danger mb-0 small">{{ status.adguard_msg }}</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if status.session_left %}
+<div class="alert alert-info">
+  <i class="bi bi-person-check"></i>
+  Sessione dashboard attiva: restano circa <strong>{{ status.session_left }} minuti</strong>.
+</div>
+{% endif %}
+
+<div class="row g-3">
+  <div class="col-md-4">
+    <a href="{{ url_for('sites') }}" class="btn btn-lg btn-outline-primary w-100 py-3">
+      <i class="bi bi-globe"></i><br>Gestione siti
+    </a>
+  </div>
+  <div class="col-md-4">
+    <a href="{{ url_for('devices') }}" class="btn btn-lg btn-outline-primary w-100 py-3">
+      <i class="bi bi-router"></i><br>Gestione dispositivi
+    </a>
+  </div>
+  <div class="col-md-4">
+    <a href="{{ url_for('schedule') }}" class="btn btn-lg btn-outline-primary w-100 py-3">
+      <i class="bi bi-clock"></i><br>Orari di blocco
+    </a>
+  </div>
+</div>
+{% endblock %}

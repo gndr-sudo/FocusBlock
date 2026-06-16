@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Gestione dispositivi - FocusBlock{% endblock %}
+
+{% block content %}
+<h2 class="mb-3"><i class="bi bi-router"></i> Gestione dispositivi</h2>
+
+{% if not adguard_ok %}
+<div class="alert alert-danger">
+  <i class="bi bi-exclamation-triangle"></i> {{ adguard_msg }}
+  Impossibile gestire il blocco dei dispositivi senza AdGuard.
+</div>
+{% endif %}
+{% if not arp_ok %}
+<div class="alert alert-warning">
+  <i class="bi bi-exclamation-triangle"></i> {{ arp_msg }}
+  L'elenco automatico dei dispositivi non è disponibile: usa l'inserimento IP manuale.
+</div>
+{% endif %}
+
+<div class="card mb-4">
+  <div class="card-body">
+    <h5 class="card-title">Blocca / sblocca un dispositivo</h5>
+    <form method="post" action="{{ url_for('devices_toggle') }}" class="row g-2">
+      <div class="col-md-6">
+        <label class="form-label small text-muted">Scegli dalla rete (ARP)</label>
+        <select class="form-select" id="device-select" onchange="document.getElementById('ip-manual').value=this.value;">
+          <option value="">-- seleziona un dispositivo --</option>
+          {% for d in devices %}
+            {% if d.mac != '-' %}
+            <option value="{{ d.ip }}">{{ d.name }} ({{ d.ip }}) - {{ d.mac }}</option>
+            {% endif %}
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label small text-muted">Oppure IP manuale</label>
+        <input type="text" name="ip" id="ip-manual" class="form-control" required
+               placeholder="192.168.1.x">
+      </div>
+      <div class="col-md-2 d-flex align-items-end">
+        <div class="d-grid w-100">
+          <input type="hidden" name="blocked" value="0">
+          <button type="submit" class="btn btn-danger"><i class="bi bi-lock"></i> Blocca</button>
+        </div>
+      </div>
+    </form>
+    <div class="form-text">Il blocco impedisce al dispositivo di usare il DNS di AdGuard (access list).</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <h5 class="card-title">Dispositivi in rete ({{ devices|length }})</h5>
+    {% if devices %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead>
+          <tr><th>Nome</th><th>IP</th><th>MAC</th><th>Stato</th><th class="text-end">Azione</th></tr>
+        </thead>
+        <tbody>
+          {% for d in devices %}
+          <tr>
+            <td><i class="bi bi-pc-display text-secondary"></i> {{ d.name }}</td>
+            <td>{{ d.ip }}</td>
+            <td class="text-muted small">{{ d.mac }}</td>
+            <td>
+              {% if d.blocked %}
+                <span class="badge bg-danger">Bloccato</span>
+              {% else %}
+                <span class="badge bg-success">Attivo</span>
+              {% endif %}
+            </td>
+            <td class="text-end">
+              <form method="post" action="{{ url_for('devices_toggle') }}" class="d-inline">
+                <input type="hidden" name="ip" value="{{ d.ip }}">
+                <input type="hidden" name="blocked" value="{{ '1' if d.blocked else '0' }}">
+                {% if d.blocked %}
+                  <button type="submit" class="btn btn-sm btn-outline-success"><i class="bi bi-unlock"></i> Sblocca</button>
+                {% else %}
+                  <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-lock"></i> Blocca</button>
+                {% endif %}
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-muted mb-0">Nessun dispositivo rilevato nella ARP table.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

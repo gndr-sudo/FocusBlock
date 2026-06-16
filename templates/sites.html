@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Gestione siti - FocusBlock{% endblock %}
+
+{% block content %}
+<h2 class="mb-3"><i class="bi bi-globe"></i> Gestione siti bloccati</h2>
+
+{% if not adguard_ok %}
+<div class="alert alert-warning">
+  <i class="bi bi-exclamation-triangle"></i> {{ adguard_msg }}
+  Le regole vengono salvate in FocusBlock ma potrebbero non essere applicate finché AdGuard non è raggiungibile.
+</div>
+{% endif %}
+
+<div class="card mb-4">
+  <div class="card-body">
+    <h5 class="card-title">Aggiungi un dominio da bloccare</h5>
+    <form method="post" action="{{ url_for('sites_add') }}" class="row g-2">
+      <div class="col-sm-9">
+        <input type="text" name="domain" class="form-control" required
+               placeholder="es. youtube.com">
+        <div class="form-text">L'IP viene risolto via DNS e il dominio aggiunto alla blocklist di AdGuard.</div>
+      </div>
+      <div class="col-sm-3 d-grid">
+        <button type="submit" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Aggiungi</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <h5 class="card-title">Domini bloccati ({{ sites|length }})</h5>
+    {% if sites %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead>
+          <tr><th>Dominio</th><th>IP risolto</th><th class="text-end">Azione</th></tr>
+        </thead>
+        <tbody>
+          {% for s in sites %}
+          <tr>
+            <td><i class="bi bi-globe2 text-info"></i> {{ s.domain }}</td>
+            <td><span class="text-muted">{{ s.ip }}</span></td>
+            <td class="text-end">
+              <form method="post" action="{{ url_for('sites_remove') }}" class="d-inline">
+                <input type="hidden" name="domain" value="{{ s.domain }}">
+                <button type="submit" class="btn btn-sm btn-outline-danger"
+                        onclick="return confirm('Rimuovere {{ s.domain }}?');">
+                  <i class="bi bi-trash"></i> Rimuovi
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-muted mb-0">Nessun dominio bloccato. Aggiungine uno qui sopra.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

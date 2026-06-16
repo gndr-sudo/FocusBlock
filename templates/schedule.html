@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Orari di blocco - FocusBlock{% endblock %}
+
+{% block content %}
+<h2 class="mb-3"><i class="bi bi-clock"></i> Orari di blocco</h2>
+
+<form method="post" action="{{ url_for('schedule_save') }}">
+  <div class="card mb-4">
+    <div class="card-body">
+      <h5 class="card-title">Fascia oraria</h5>
+
+      <div class="form-check form-switch mb-3">
+        <input class="form-check-input" type="checkbox" name="enabled" id="enabled"
+               {% if schedule.enabled %}checked{% endif %}>
+        <label class="form-check-label" for="enabled">Pianificazione attiva</label>
+      </div>
+
+      <div class="row g-3 mb-3">
+        <div class="col-sm-6">
+          <label class="form-label">Inizio</label>
+          <input type="time" name="start" class="form-control" value="{{ schedule.start }}" required>
+        </div>
+        <div class="col-sm-6">
+          <label class="form-label">Fine</label>
+          <input type="time" name="end" class="form-control" value="{{ schedule.end }}" required>
+        </div>
+      </div>
+
+      <label class="form-label">Giorni della settimana</label>
+      <div class="d-flex flex-wrap gap-2">
+        {% for i in range(7) %}
+        <input type="checkbox" class="btn-check" name="day{{ i }}" id="day{{ i }}"
+               {% if i in schedule.days %}checked{% endif %}>
+        <label class="btn btn-outline-primary" for="day{{ i }}">{{ giorni[i][:3] }}</label>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-4">
+    <div class="card-body">
+      <h5 class="card-title">Parametri quiz e sblocco</h5>
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label class="form-label">N° domande</label>
+          <input type="number" name="num_questions" class="form-control" min="1" max="100"
+                 value="{{ quiz_cfg.num_questions }}">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Soglia superamento (%)</label>
+          <input type="number" name="pass_threshold" class="form-control" min="1" max="100"
+                 value="{{ quiz_cfg.pass_threshold }}">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Tempo quiz (secondi)</label>
+          <input type="number" name="timer_seconds" class="form-control" min="10" max="3600"
+                 value="{{ quiz_cfg.timer_seconds }}">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Durata accesso dashboard (min)</label>
+          <input type="number" name="session_minutes" class="form-control" min="1" max="1440"
+                 value="{{ session_minutes }}">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Durata sblocco siti (min)</label>
+          <input type="number" name="unlock_minutes" class="form-control" min="1" max="1440"
+                 value="{{ unlock_minutes }}">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="d-grid mb-5">
+    <button type="submit" class="btn btn-primary btn-lg"><i class="bi bi-save"></i> Salva impostazioni</button>
+  </div>
+</form>
+{% endblock %}

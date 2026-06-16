@@ -1,0 +1,19 @@
+[Unit]
+Description=FocusBlock - blocco siti distraenti con sblocco tramite quiz
+After=network-online.target AdGuardHome.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/focusblock
+ExecStart=/usr/bin/python3 /home/pi/focusblock/app.py
+Restart=on-failure
+RestartSec=5
+# Lasciamo che Flask scriva i log su journald
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
