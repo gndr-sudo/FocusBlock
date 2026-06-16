@@ -62,8 +62,11 @@ coprire circa **10-20 minuti** di risposta effettiva. Soglia di superamento 70%.
 
 - **Siti**: regole utente AdGuard `||dominio^` aggiunte/rimosse via
   `/control/filtering/set_rules`. Attive solo nella fascia oraria.
-- **Dispositivi**: IP aggiunti/rimossi da `disallowed_clients` via
-  `/control/access/set` (il dispositivo non può più usare il DNS di AdGuard).
+- **Dispositivi**: gli IP gestiti vengono aggiunti/rimossi da
+  `disallowed_clients` via `/control/access/set` **solo durante la fascia
+  oraria** (come i siti); fuori orario e durante lo sblocco temporaneo
+  post-quiz vengono sbloccati. Bloccato = il dispositivo non può usare il
+  DNS di AdGuard.
 - **Discovery dispositivi**: lettura della ARP table (`arp -a`).
 
 ## Note

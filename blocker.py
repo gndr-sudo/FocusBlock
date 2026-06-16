@@ -65,6 +65,8 @@ DEFAULT_CONFIG = {
     },
     # Lista dei siti gestiti da FocusBlock: [{"domain": "...", "ip": "..."}]
     "blocked_sites": [],
+    # IP dei dispositivi gestiti: bloccati su AdGuard solo durante la fascia
+    "blocked_devices": [],
     # Timestamp epoch fino al quale i siti restano sbloccati temporaneamente
     "unlock_until": 0,
     # Secret key Flask generata in fase di installazione
@@ -286,12 +288,25 @@ def apply_blocking_state(cfg=None):
      - fascia oraria attiva
      - eventuale sblocco temporaneo in corso
 
+    Sincronizza sia i domini bloccati sia i dispositivi gestiti: entrambi
+    vengono attivati su AdGuard solo durante la fascia oraria (e disattivati
+    fuori orario o durante lo sblocco temporaneo post-quiz).
+
     Chiamata sia dallo scheduler (ogni minuto) sia dopo modifiche puntuali.
     Ritorna (ok, messaggio, should_block)."""
     cfg = cfg or load_config()
     should_block = is_blocking_active(cfg) and not is_temporarily_unlocked(cfg)
+
+    # Domini
     domains = [s.get("domain") for s in cfg.get("blocked_sites", []) if s.get("domain")]
-    ok, msg = _sync_adguard_rules(domains, should_block, cfg)
+    ok_sites, msg_sites = _sync_adguard_rules(domains, should_block, cfg)
+
+    # Dispositivi (seguono la stessa fascia oraria dei siti)
+    device_ips = [ip for ip in cfg.get("blocked_devices", []) if ip]
+    ok_dev, msg_dev = _sync_adguard_devices(device_ips, should_block, cfg)
+
+    ok = ok_sites and ok_dev
+    msg = msg_sites if not ok_sites else (msg_dev if not ok_dev else "Stato applicato")
     return ok, msg, should_block
 
 
@@ -338,9 +353,18 @@ def remove_blocked_site(domain):
     cfg["blocked_sites"] = new_sites
     save_config(cfg)
 
-    ok, msg, _ = apply_blocking_state(cfg)
-    if not ok:
-        return False, f"Dominio rimosso da FocusBlock, ma AdGuard non aggiornato: {msg}"
+    # Rimuoviamo esplicitamente la regola da AdGuard: il dominio non è più
+    # gestito, quindi la sincronizzazione periodica non lo toccherebbe più.
+    rule = _managed_rule(domain)
+    try:
+        status = _ag_get("/control/filtering/status", cfg)
+        rules = status.get("user_rules", []) or []
+        if any(r.strip() == rule for r in rules):
+            _ag_post("/control/filtering/set_rules",
+                     {"rules": [r for r in rules if r.strip() != rule]}, cfg)
+    except requests.exceptions.RequestException as exc:
+        return False, f"Dominio rimosso da FocusBlock, ma AdGuard non aggiornato: {_ag_error_message(exc)}"
+
     return True, f"Dominio '{domain}' rimosso."
 
 
@@ -377,44 +401,86 @@ def _set_access_list(data, cfg=None):
     _ag_post("/control/access/set", payload, cfg)
 
 
-def is_device_blocked(ip, cfg=None):
-    """Ritorna True se l'IP è nella lista disallowed_clients di AdGuard."""
+def _sync_adguard_devices(device_ips, enabled, cfg=None):
+    """Sincronizza i dispositivi gestiti da FocusBlock nella disallowed_clients
+    di AdGuard. Gestisce SOLO gli IP indicati: vengono prima rimossi e, se
+    `enabled` è True, riaggiunti. Eventuali altri IP bloccati esternamente
+    NON vengono toccati. Ritorna (ok, messaggio)."""
+    cfg = cfg or load_config()
     ok, data = get_access_list(cfg)
     if not ok:
-        return False
-    return ip in data.get("disallowed_clients", [])
+        return False, data  # data contiene il messaggio d'errore
+
+    managed = set(device_ips)
+    current = list(data.get("disallowed_clients", []))
+
+    # Togliamo i nostri IP gestiti dall'elenco corrente
+    new_list = [c for c in current if c not in managed]
+    if enabled:
+        new_list.extend(sorted(managed))
+
+    if new_list != current:
+        data["disallowed_clients"] = new_list
+        try:
+            _set_access_list(data, cfg)
+        except requests.exceptions.RequestException as exc:
+            return False, _ag_error_message(exc)
+
+    return True, "Dispositivi sincronizzati"
 
 
-def set_device_blocked(ip, blocked):
-    """Blocca (blocked=True) o sblocca (blocked=False) un dispositivo
-    aggiungendolo/togliendolo da disallowed_clients. Ritorna (ok, messaggio)."""
+def manage_device(ip):
+    """Aggiunge un dispositivo alla lista gestita (verrà bloccato durante la
+    fascia oraria) e applica subito lo stato. Ritorna (ok, messaggio)."""
     ip = (ip or "").strip()
     if not _is_valid_ip(ip):
         return False, "Indirizzo IP non valido."
 
-    ok, data = get_access_list()
+    cfg = load_config()
+    lst = cfg.setdefault("blocked_devices", [])
+    if ip in lst:
+        return False, f"Il dispositivo {ip} è già gestito."
+    lst.append(ip)
+    save_config(cfg)
+
+    ok, msg, blocking = apply_blocking_state(cfg)
     if not ok:
-        return False, data  # data contiene il messaggio d'errore
+        return False, f"Dispositivo salvato, ma AdGuard non aggiornato: {msg}"
+    if blocking:
+        return True, f"Dispositivo {ip} bloccato (fascia oraria attiva ora)."
+    return True, f"Dispositivo {ip} aggiunto: verrà bloccato durante la fascia oraria."
 
-    disallowed = list(data.get("disallowed_clients", []))
 
-    if blocked:
-        if ip in disallowed:
-            return True, f"Il dispositivo {ip} è già bloccato."
-        disallowed.append(ip)
-    else:
-        if ip not in disallowed:
-            return True, f"Il dispositivo {ip} è già sbloccato."
-        disallowed = [c for c in disallowed if c != ip]
+def unmanage_device(ip):
+    """Rimuove un dispositivo dalla lista gestita (e lo sblocca subito su
+    AdGuard se era bloccato). Ritorna (ok, messaggio)."""
+    ip = (ip or "").strip()
+    cfg = load_config()
+    lst = cfg.get("blocked_devices", [])
+    if ip not in lst:
+        return False, f"Il dispositivo {ip} non è gestito."
+    cfg["blocked_devices"] = [x for x in lst if x != ip]
+    save_config(cfg)
 
-    data["disallowed_clients"] = disallowed
-    try:
-        _set_access_list(data)
-    except requests.exceptions.RequestException as exc:
-        return False, _ag_error_message(exc)
+    # Togliamo esplicitamente l'IP da AdGuard: non essendo più gestito, la
+    # sincronizzazione periodica non lo rimuoverebbe.
+    ok, data = get_access_list(cfg)
+    if not ok:
+        return False, f"Dispositivo rimosso dalla gestione, ma AdGuard non raggiungibile: {data}"
+    if ip in data.get("disallowed_clients", []):
+        data["disallowed_clients"] = [c for c in data["disallowed_clients"] if c != ip]
+        try:
+            _set_access_list(data, cfg)
+        except requests.exceptions.RequestException as exc:
+            return False, f"Dispositivo rimosso dalla gestione, ma AdGuard non aggiornato: {_ag_error_message(exc)}"
 
-    azione = "bloccato" if blocked else "sbloccato"
-    return True, f"Dispositivo {ip} {azione}."
+    return True, f"Dispositivo {ip} non più gestito (sbloccato)."
+
+
+def list_managed_devices(cfg=None):
+    """Ritorna la lista degli IP dei dispositivi gestiti (dalla config)."""
+    cfg = cfg or load_config()
+    return cfg.get("blocked_devices", [])
 
 
 def _is_valid_ip(ip):

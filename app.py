@@ -355,25 +355,27 @@ def sites_remove():
 @app.route("/devices")
 @access_required
 def devices():
+    cfg = blocker.load_config()
     arp_ok, arp_data = blocker.get_arp_devices()
-    ag_ok, access_data = blocker.get_access_list()
+    ag_ok, ag_msg = blocker.test_adguard(cfg)
 
-    disallowed = []
-    if ag_ok:
-        disallowed = access_data.get("disallowed_clients", [])
+    # Dispositivi gestiti (verranno bloccati durante la fascia oraria)
+    managed = set(blocker.list_managed_devices(cfg))
+    # È in corso il blocco effettivo adesso?
+    blocking_now = blocker.is_blocking_active(cfg) and not blocker.is_temporarily_unlocked(cfg)
 
     device_list = []
     if arp_ok:
         for dev in arp_data:
             dev = dict(dev)
-            dev["blocked"] = dev["ip"] in disallowed
+            dev["managed"] = dev["ip"] in managed
             device_list.append(dev)
 
-    # Eventuali IP bloccati manualmente non presenti nella ARP table
+    # IP gestiti non presenti nella ARP table (li mostriamo comunque)
     arp_ips = {d["ip"] for d in device_list}
-    for ip in disallowed:
+    for ip in managed:
         if ip not in arp_ips:
-            device_list.append({"name": ip, "ip": ip, "mac": "-", "blocked": True})
+            device_list.append({"name": ip, "ip": ip, "mac": "-", "managed": True})
 
     return render_template(
         "devices.html",
@@ -381,7 +383,8 @@ def devices():
         arp_ok=arp_ok,
         arp_msg=arp_data if not arp_ok else "",
         adguard_ok=ag_ok,
-        adguard_msg=access_data if not ag_ok else "",
+        adguard_msg=ag_msg if not ag_ok else "",
+        blocking_now=blocking_now,
     )
 
 
@@ -389,9 +392,12 @@ def devices():
 @access_required
 def devices_toggle():
     ip = request.form.get("ip", "").strip()
-    # Lo stato attuale arriva dal form; vogliamo invertirlo
-    currently_blocked = request.form.get("blocked", "0") == "1"
-    ok, msg = blocker.set_device_blocked(ip, not currently_blocked)
+    # Se è già gestito lo rimuoviamo, altrimenti lo aggiungiamo alla gestione
+    currently_managed = request.form.get("managed", "0") == "1"
+    if currently_managed:
+        ok, msg = blocker.unmanage_device(ip)
+    else:
+        ok, msg = blocker.manage_device(ip)
     flash(msg, "success" if ok else "danger")
     return redirect(url_for("devices"))
 

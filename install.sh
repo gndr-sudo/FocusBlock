@@ -90,6 +90,7 @@ default = {
     "unlock_minutes": 30,
     "quiz": {"num_questions": 20, "pass_threshold": 70},
     "blocked_sites": [],
+    "blocked_devices": [],
     "unlock_until": 0,
     "secret_key": "",
 }

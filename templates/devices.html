@@ -4,10 +4,21 @@
 {% block content %}
 <h2 class="mb-3"><i class="bi bi-router"></i> Gestione dispositivi</h2>
 
+<div class="alert {{ 'alert-danger' if blocking_now else 'alert-secondary' }}">
+  <i class="bi bi-info-circle"></i>
+  I dispositivi gestiti vengono bloccati <strong>solo durante la fascia oraria</strong>
+  (come i siti) e sbloccati fuori orario e durante lo sblocco temporaneo post-quiz.
+  {% if blocking_now %}
+    <strong>Adesso il blocco è ATTIVO</strong>: i dispositivi gestiti sono bloccati in questo momento.
+  {% else %}
+    Adesso sei <strong>fuori fascia</strong>: i dispositivi gestiti non sono bloccati al momento.
+  {% endif %}
+</div>
+
 {% if not adguard_ok %}
 <div class="alert alert-danger">
   <i class="bi bi-exclamation-triangle"></i> {{ adguard_msg }}
-  Impossibile gestire il blocco dei dispositivi senza AdGuard.
+  Impossibile applicare il blocco dei dispositivi senza AdGuard.
 </div>
 {% endif %}
 {% if not arp_ok %}
@@ -19,9 +30,10 @@
 
 <div class="card mb-4">
   <div class="card-body">
-    <h5 class="card-title">Blocca / sblocca un dispositivo</h5>
+    <h5 class="card-title">Aggiungi un dispositivo alla gestione</h5>
     <form method="post" action="{{ url_for('devices_toggle') }}" class="row g-2">
-      <div class="col-md-6">
+      <input type="hidden" name="managed" value="0">
+      <div class="col-md-7">
         <label class="form-label small text-muted">Scegli dalla rete (ARP)</label>
         <select class="form-select" id="device-select" onchange="document.getElementById('ip-manual').value=this.value;">
           <option value="">-- seleziona un dispositivo --</option>
@@ -32,19 +44,18 @@
           {% endfor %}
         </select>
       </div>
-      <div class="col-md-4">
+      <div class="col-md-3">
         <label class="form-label small text-muted">Oppure IP manuale</label>
         <input type="text" name="ip" id="ip-manual" class="form-control" required
                placeholder="192.168.1.x">
       </div>
       <div class="col-md-2 d-flex align-items-end">
         <div class="d-grid w-100">
-          <input type="hidden" name="blocked" value="0">
-          <button type="submit" class="btn btn-danger"><i class="bi bi-lock"></i> Blocca</button>
+          <button type="submit" class="btn btn-primary"><i class="bi bi-clock-history"></i> Gestisci</button>
         </div>
       </div>
     </form>
-    <div class="form-text">Il blocco impedisce al dispositivo di usare il DNS di AdGuard (access list).</div>
+    <div class="form-text">Il dispositivo verrà bloccato (nessuna risoluzione DNS) durante la fascia oraria.</div>
   </div>
 </div>
 
@@ -64,20 +75,24 @@
             <td>{{ d.ip }}</td>
             <td class="text-muted small">{{ d.mac }}</td>
             <td>
-              {% if d.blocked %}
-                <span class="badge bg-danger">Bloccato</span>
+              {% if d.managed %}
+                {% if blocking_now %}
+                  <span class="badge bg-danger">Bloccato ora</span>
+                {% else %}
+                  <span class="badge bg-warning text-dark">Bloccato in fascia</span>
+                {% endif %}
               {% else %}
-                <span class="badge bg-success">Attivo</span>
+                <span class="badge bg-success">Libero</span>
               {% endif %}
             </td>
             <td class="text-end">
               <form method="post" action="{{ url_for('devices_toggle') }}" class="d-inline">
                 <input type="hidden" name="ip" value="{{ d.ip }}">
-                <input type="hidden" name="blocked" value="{{ '1' if d.blocked else '0' }}">
-                {% if d.blocked %}
-                  <button type="submit" class="btn btn-sm btn-outline-success"><i class="bi bi-unlock"></i> Sblocca</button>
+                <input type="hidden" name="managed" value="{{ '1' if d.managed else '0' }}">
+                {% if d.managed %}
+                  <button type="submit" class="btn btn-sm btn-outline-success"><i class="bi bi-unlock"></i> Togli dal blocco</button>
                 {% else %}
-                  <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-lock"></i> Blocca</button>
+                  <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-clock-history"></i> Blocca in fascia</button>
                 {% endif %}
               </form>
             </td>
